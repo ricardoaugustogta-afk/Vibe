@@ -97,6 +97,7 @@ export default function MapScreen() {
         markers,
         userLat: coords?.latitude,
         userLng: coords?.longitude,
+        dark: true,
       })
     : null;
 

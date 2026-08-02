@@ -18,3 +18,11 @@ export async function searchPlace(query: string): Promise<GeocodeResult[]> {
     lng: parseFloat(r.lon),
   }));
 }
+
+export async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=pt-BR,en`;
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error('reverse_geocode_failed');
+  const data = await res.json();
+  return data.display_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}

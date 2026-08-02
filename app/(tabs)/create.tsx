@@ -8,17 +8,18 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  TextInput,
   type ViewStyle,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Zap, CalendarClock, MapPin, Check } from 'lucide-react-native';
+import { Zap, CalendarClock, MapPin, Check, Calendar, Clock } from 'lucide-react-native';
 import { useI18n } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from '@/hooks/useLocation';
 import { supabase } from '@/lib/supabase';
 import { ThemedText } from '@/components/ThemedText';
 import { AuthTextInput } from '@/components/AuthTextInput';
+import { MapPickerModal } from '@/components/MapPickerModal';
+import { DatePickerModal, TimePickerModal } from '@/components/DateTimePickerModal';
 import { COLORS, SPACING, RADII, SHADOWS, CATEGORIES_COLORS } from '@/lib/theme';
 import { EVENT_CATEGORIES, type EventCategory } from '@/types/database';
 
@@ -44,11 +45,19 @@ export default function CreateScreen() {
   const [category, setCategory] = useState<EventCategory>('Geral');
   const [address, setAddress] = useState('');
   const [duration, setDuration] = useState(2);
-  const [dateStr, setDateStr] = useState('');
-  const [startStr, setStartStr] = useState('');
-  const [endStr, setEndStr] = useState('');
+  const [pickedLocation, setPickedLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [dateObj, setDateObj] = useState<Date | null>(null);
+  const [startHour, setStartHour] = useState<number | null>(null);
+  const [startMin, setStartMin] = useState<number | null>(null);
+  const [endHour, setEndHour] = useState<number | null>(null);
+  const [endMin, setEndMin] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [showMap, setShowMap] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
 
   async function handlePublish() {
     setError(null);
@@ -56,13 +65,14 @@ export default function CreateScreen() {
       setError(t('create.errorTitle'));
       return;
     }
-    if (!coords) {
+    const loc = pickedLocation ?? (coords ? { lat: coords.latitude, lng: coords.longitude } : null);
+    if (!loc) {
       await requestPermission();
       setError(t('create.errorLocation'));
       return;
     }
     if (mode === 'scheduled') {
-      if (!dateStr || !startStr || !endStr) {
+      if (!dateObj || startHour === null || endHour === null) {
         setError(t('create.errorEndTime'));
         return;
       }
@@ -76,8 +86,10 @@ export default function CreateScreen() {
       startTime = now;
       endTime = new Date(now.getTime() + duration * 3600000);
     } else {
-      startTime = new Date(`${dateStr}T${startStr}:00`);
-      endTime = new Date(`${dateStr}T${endStr}:00`);
+      startTime = new Date(dateObj!);
+      startTime.setHours(startHour!, startMin ?? 0, 0, 0);
+      endTime = new Date(dateObj!);
+      endTime.setHours(endHour!, endMin ?? 0, 0, 0);
       if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
         setError(t('create.errorEndTime'));
         return;
@@ -105,7 +117,7 @@ export default function CreateScreen() {
         title: title.trim(),
         description: description.trim() || null,
         category,
-        location: `POINT(${coords.longitude} ${coords.latitude})`,
+        location: `POINT(${loc.lng} ${loc.lat})`,
         address_text: address.trim() || null,
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
@@ -122,7 +134,14 @@ export default function CreateScreen() {
     router.replace(`/event/${data.id}`);
   }
 
-  const today = new Date().toISOString().split('T')[0];
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const dateLabel = dateObj
+    ? `${pad(dateObj.getDate())}/${pad(dateObj.getMonth() + 1)}/${dateObj.getFullYear()}`
+    : '';
+  const startTimeLabel = startHour !== null ? `${pad(startHour)}:${pad(startMin ?? 0)}` : '';
+  const endTimeLabel = endHour !== null ? `${pad(endHour)}:${pad(endMin ?? 0)}` : '';
+  const today = new Date();
+  const maxDate = new Date(today.getTime() + MAX_FUTURE_DAYS * 86400000);
 
   return (
     <KeyboardAvoidingView
@@ -136,7 +155,6 @@ export default function CreateScreen() {
           </ThemedText>
         </View>
 
-        {/* Mode selector */}
         <View style={styles.modeRow}>
           <ModeCard
             active={mode === 'instant'}
@@ -156,12 +174,11 @@ export default function CreateScreen() {
           />
         </View>
 
-        {/* Location info */}
         <View style={styles.locInfo}>
-          <MapPin color={coords ? COLORS.success[600] : COLORS.warning[500]} size={18} />
+          <MapPin color={pickedLocation || coords ? COLORS.success[600] : COLORS.warning[500]} size={18} />
           {locLoading ? (
             <ActivityIndicator color={COLORS.primary[600]} size="small" />
-          ) : coords ? (
+          ) : pickedLocation || coords ? (
             <ThemedText variant="muted" color={COLORS.neutral[600]}>
               {t('create.locationHint')}
             </ThemedText>
@@ -170,7 +187,7 @@ export default function CreateScreen() {
               {t('create.locationUnknown')}
             </ThemedText>
           )}
-          {!coords && !locLoading && (
+          {!coords && !pickedLocation && !locLoading && (
             <Pressable onPress={requestPermission} style={styles.retryLink}>
               <ThemedText color={COLORS.primary[600]} weight="semibold" size={13}>
                 {t('create.useMyLocation')}
@@ -179,7 +196,6 @@ export default function CreateScreen() {
           )}
         </View>
 
-        {/* Form */}
         <View style={styles.form}>
           <AuthTextInput
             label={t('create.eventTitle')}
@@ -194,15 +210,25 @@ export default function CreateScreen() {
             placeholder={t('create.descriptionPlaceholder')}
             style={styles.descInput as ViewStyle}
           />
-          <AuthTextInput
-            label={t('create.address')}
-            value={address}
-            onChangeText={setAddress}
-            placeholder={t('create.addressPlaceholder')}
-            icon={<MapPin color={COLORS.neutral[400]} size={20} />}
-          />
 
-          {/* Category */}
+          {/* Location picker field */}
+          <View style={styles.fieldGap}>
+            <ThemedText variant="label" color={COLORS.neutral[600]} weight="medium" style={styles.fieldLabel}>
+              {t('create.address')}
+            </ThemedText>
+            <Pressable style={styles.mapPickerField} onPress={() => setShowMap(true)}>
+              <MapPin color={COLORS.neutral[400]} size={20} />
+              <ThemedText
+                color={address ? COLORS.neutral[900] : COLORS.neutral[400]}
+                style={{ flex: 1 }}
+                numberOfLines={1}
+              >
+                {address || t('create.addressPlaceholder')}
+              </ThemedText>
+              <MapPin color={COLORS.primary[600]} size={20} />
+            </Pressable>
+          </View>
+
           <View style={styles.fieldGap}>
             <ThemedText variant="label" color={COLORS.neutral[600]} weight="medium" style={styles.fieldLabel}>
               {t('create.category')}
@@ -215,7 +241,7 @@ export default function CreateScreen() {
                     key={cat}
                     style={[
                       styles.catPill,
-                      { borderColor: selected ? CATEGORIES_COLORS[cat] : COLORS.neutral[200] },
+                      { borderColor: selected ? CATEGORIES_COLORS[cat] : COLORS.neutral[300] },
                       selected && { backgroundColor: CATEGORIES_COLORS[cat] },
                     ]}
                     onPress={() => setCategory(cat)}
@@ -232,7 +258,6 @@ export default function CreateScreen() {
             </ScrollView>
           </View>
 
-          {/* Time fields */}
           {mode === 'instant' ? (
             <View style={styles.fieldGap}>
               <ThemedText variant="label" color={COLORS.neutral[600]} weight="medium" style={styles.fieldLabel}>
@@ -266,7 +291,12 @@ export default function CreateScreen() {
                   <ThemedText variant="label" color={COLORS.neutral[600]} weight="medium" style={styles.fieldLabel}>
                     {t('create.startDate')}
                   </ThemedText>
-                  <DateInput value={dateStr} onChange={setDateStr} min={today} mode="date" placeholder="DD/MM/AAAA" />
+                  <Pressable style={styles.pickerField} onPress={() => setShowDatePicker(true)}>
+                    <Calendar color={COLORS.neutral[400]} size={18} />
+                    <ThemedText color={dateLabel ? COLORS.neutral[900] : COLORS.neutral[400]}>
+                      {dateLabel || 'DD/MM/AAAA'}
+                    </ThemedText>
+                  </Pressable>
                 </View>
               </View>
               <View style={styles.dateTimeRow}>
@@ -274,13 +304,23 @@ export default function CreateScreen() {
                   <ThemedText variant="label" color={COLORS.neutral[600]} weight="medium" style={styles.fieldLabel}>
                     {t('create.startTime')}
                   </ThemedText>
-                  <DateInput value={startStr} onChange={setStartStr} mode="time" placeholder="HH:MM" />
+                  <Pressable style={styles.pickerField} onPress={() => setShowStartPicker(true)}>
+                    <Clock color={COLORS.neutral[400]} size={18} />
+                    <ThemedText color={startTimeLabel ? COLORS.neutral[900] : COLORS.neutral[400]}>
+                      {startTimeLabel || 'HH:MM'}
+                    </ThemedText>
+                  </Pressable>
                 </View>
                 <View style={styles.dateTimeField}>
                   <ThemedText variant="label" color={COLORS.neutral[600]} weight="medium" style={styles.fieldLabel}>
                     {t('create.endTime')}
                   </ThemedText>
-                  <DateInput value={endStr} onChange={setEndStr} mode="time" placeholder="HH:MM" />
+                  <Pressable style={styles.pickerField} onPress={() => setShowEndPicker(true)}>
+                    <Clock color={COLORS.neutral[400]} size={18} />
+                    <ThemedText color={endTimeLabel ? COLORS.neutral[900] : COLORS.neutral[400]}>
+                      {endTimeLabel || 'HH:MM'}
+                    </ThemedText>
+                  </Pressable>
                 </View>
               </View>
             </View>
@@ -309,6 +349,54 @@ export default function CreateScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <MapPickerModal
+        visible={showMap}
+        onClose={() => setShowMap(false)}
+        onConfirm={(result) => {
+          setPickedLocation({ lat: result.lat, lng: result.lng });
+          setAddress(result.address || address);
+          setShowMap(false);
+        }}
+        initialLat={pickedLocation?.lat ?? coords?.latitude}
+        initialLng={pickedLocation?.lng ?? coords?.longitude}
+      />
+
+      <DatePickerModal
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        onConfirm={(d) => {
+          setDateObj(d);
+          setShowDatePicker(false);
+        }}
+        minDate={today}
+        maxDate={maxDate}
+        initialDate={dateObj ?? undefined}
+      />
+
+      <TimePickerModal
+        visible={showStartPicker}
+        onClose={() => setShowStartPicker(false)}
+        onConfirm={(h, m) => {
+          setStartHour(h);
+          setStartMin(m);
+          setShowStartPicker(false);
+        }}
+        initialHour={startHour ?? undefined}
+        initialMinute={startMin ?? undefined}
+      />
+
+      <TimePickerModal
+        visible={showEndPicker}
+        onClose={() => setShowEndPicker(false)}
+        onConfirm={(h, m) => {
+          setEndHour(h);
+          setEndMin(m);
+          setShowEndPicker(false);
+        }}
+        initialHour={endHour ?? undefined}
+        initialMinute={endMin ?? undefined}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -344,33 +432,8 @@ function ModeCard({
   );
 }
 
-function DateInput({
-  value,
-  onChange,
-  mode,
-  placeholder,
-  min,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  mode: 'date' | 'time';
-  placeholder: string;
-  min?: string;
-}) {
-  return (
-    <TextInput
-      value={value}
-      onChangeText={onChange}
-      placeholder={placeholder}
-      placeholderTextColor={COLORS.neutral[400]}
-      style={styles.dateInput}
-      keyboardType={mode === 'time' ? 'numeric' : 'numeric'}
-    />
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.neutral[50] },
+  container: { flex: 1, backgroundColor: COLORS.neutral[0] },
   scroll: { paddingHorizontal: SPACING.lg, paddingTop: 60, paddingBottom: 40 },
   header: { marginBottom: SPACING.lg },
   modeRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.md },
@@ -381,15 +444,15 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderRadius: RADII.lg,
     borderWidth: 1.5,
-    borderColor: COLORS.neutral[200],
-    backgroundColor: COLORS.neutral[0],
+    borderColor: COLORS.neutral[300],
+    backgroundColor: COLORS.neutral[50],
   },
   locInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: SPACING.xs,
-    backgroundColor: COLORS.neutral[0],
+    backgroundColor: COLORS.neutral[50],
     borderRadius: RADII.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
@@ -399,16 +462,27 @@ const styles = StyleSheet.create({
   },
   retryLink: { marginLeft: 'auto' },
   form: { gap: SPACING.md },
-  descInput: {},
+  descInput: {} as ViewStyle,
   fieldGap: { gap: SPACING.sm },
   fieldLabel: { marginLeft: SPACING.xs },
+  mapPickerField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.neutral[50],
+    borderRadius: RADII.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.neutral[300],
+    paddingHorizontal: SPACING.md,
+    height: 54,
+  },
   catScroll: { gap: SPACING.sm, paddingRight: SPACING.lg },
   catPill: {
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     borderRadius: RADII.pill,
     borderWidth: 1.5,
-    backgroundColor: COLORS.neutral[0],
+    backgroundColor: COLORS.neutral[50],
   },
   durationRow: { flexDirection: 'row', gap: SPACING.sm },
   durPill: {
@@ -420,8 +494,8 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderRadius: RADII.md,
     borderWidth: 1.5,
-    borderColor: COLORS.neutral[200],
-    backgroundColor: COLORS.neutral[0],
+    borderColor: COLORS.neutral[300],
+    backgroundColor: COLORS.neutral[50],
   },
   durPillActive: {
     backgroundColor: COLORS.primary[600],
@@ -429,16 +503,16 @@ const styles = StyleSheet.create({
   },
   dateTimeRow: { flexDirection: 'row', gap: SPACING.md },
   dateTimeField: { flex: 1, gap: SPACING.xs },
-  dateInput: {
-    backgroundColor: COLORS.neutral[0],
+  pickerField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.neutral[50],
     borderRadius: RADII.md,
     borderWidth: 1.5,
-    borderColor: COLORS.neutral[200],
+    borderColor: COLORS.neutral[300],
     paddingHorizontal: SPACING.md,
     height: 54,
-    fontSize: 16,
-    color: COLORS.neutral[900],
-    fontFamily: 'Inter-Regular',
   },
   errorBox: {
     backgroundColor: COLORS.live[50],
