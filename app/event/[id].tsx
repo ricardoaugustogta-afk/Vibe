@@ -15,7 +15,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ArrowLeft, Heart, Check, X, Flag, Trash2, Clock, Image as ImageIcon, Send, MapPin, MoreVertical } from 'lucide-react-native';
+import { ArrowLeft, Heart, Check, X, Flag, Trash2, Clock, Image as ImageIcon, Send, MapPin, MoveVertical as MoreVertical } from 'lucide-react-native';
 import { useI18n } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -150,7 +150,7 @@ export default function EventDetailScreen() {
       .select('status')
       .eq('event_id', id)
       .eq('user_id', session.user.id);
-    setMyReactions((data?.map((r) => r.status as ReactionStatus)) ?? []);
+    setMyReactions((data?.map((r: { status: string }) => r.status as ReactionStatus)) ?? []);
   }, [id, session]);
 
   useEffect(() => {

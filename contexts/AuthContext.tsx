@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState({ session, profile, loading: false });
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event: string, session: Session | null) => {
       (async () => {
         if (event === 'SIGNED_OUT' || !session) {
           if (mounted) setState({ session: null, profile: null, loading: false });
@@ -150,6 +150,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function demoSignIn(username?: string, language?: Language) {
     const session = createDemoSession();
     const profile = createDemoProfile(username || 'Convidado', language || 'pt-BR');
+    supabase.from('profiles').upsert({
+      id: DEMO_USER_ID,
+      username: profile.username,
+      avatar_url: profile.avatar_url,
+      instagram_username: profile.instagram_username,
+      language: profile.language,
+      created_at: profile.created_at,
+    });
     setState({ session, profile, loading: false });
   }
 
