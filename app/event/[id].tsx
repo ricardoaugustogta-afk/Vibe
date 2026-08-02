@@ -278,6 +278,14 @@ export default function EventDetailScreen() {
     ]);
   }
 
+  function goToTabs() {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  }
+
   async function endEventNow() {
     if (!event) return;
     Alert.alert(t('app.name'), t('event.confirmEnd'), [
@@ -287,7 +295,7 @@ export default function EventDetailScreen() {
         style: 'destructive',
         onPress: async () => {
           await supabase.from('events').update({ end_time: new Date().toISOString() }).eq('id', event.id);
-          router.back();
+          goToTabs();
         },
       },
     ]);
@@ -302,7 +310,7 @@ export default function EventDetailScreen() {
         style: 'destructive',
         onPress: async () => {
           await supabase.from('events').delete().eq('id', event.id);
-          router.back();
+          goToTabs();
         },
       },
     ]);
@@ -336,7 +344,7 @@ export default function EventDetailScreen() {
         <ThemedText variant="h3" color={COLORS.neutral[400]}>
           {t('event.ended')}
         </ThemedText>
-        <Pressable style={styles.backFromGone} onPress={() => router.back()}>
+        <Pressable style={styles.backFromGone} onPress={goToTabs}>
           <ThemedText color={COLORS.primary[600]} weight="semibold">
             {t('common.close')}
           </ThemedText>
@@ -357,7 +365,7 @@ export default function EventDetailScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.iconBtn} onPress={() => router.back()}>
+        <Pressable style={styles.iconBtn} onPress={goToTabs}>
           <ArrowLeft color={COLORS.neutral[800]} size={24} />
         </Pressable>
         <View style={styles.headerCenter}>
