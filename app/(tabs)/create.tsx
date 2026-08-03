@@ -130,8 +130,12 @@ export default function CreateScreen() {
       setError(t('create.errorGeneric'));
       return;
     }
-    Alert.alert(t('app.name'), t('create.success'));
-    router.replace(`/event/${data.id}`);
+    Alert.alert(t('app.name'), t('create.success'), [
+      {
+        text: 'OK',
+        onPress: () => router.replace(`/event/${data.id}`),
+      },
+    ]);
   }
 
   const pad = (n: number) => n.toString().padStart(2, '0');
