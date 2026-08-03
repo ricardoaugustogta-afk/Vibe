@@ -295,7 +295,8 @@ export default function EventDetailScreen() {
         style: 'destructive',
         onPress: async () => {
           await supabase.from('events').update({ end_time: new Date().toISOString() }).eq('id', event.id);
-          goToTabs();
+          setMenuOpen(false);
+          loadEvent();
         },
       },
     ]);
