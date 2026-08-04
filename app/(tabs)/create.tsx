@@ -133,7 +133,7 @@ export default function CreateScreen() {
     Alert.alert(t('app.name'), t('create.success'), [
       {
         text: 'OK',
-        onPress: () => router.replace(`/event/${data.id}`),
+        onPress: () => router.replace('/(tabs)'),
       },
     ]);
   }
