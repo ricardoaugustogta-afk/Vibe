@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { Search, MapPin, Navigation, X, ChevronUp } from 'lucide-react-native';
+import { StarRatingDisplay } from '@/components/StarRating';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { router, useFocusEffect } from 'expo-router';
 import { useI18n } from '@/contexts/LanguageContext';
@@ -37,11 +38,7 @@ export default function MapScreen() {
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      requestPermission();
-    }, [requestPermission]),
-  );
+  const lastCenter = useRef<{ lat: number; lng: number } | null>(null);
 
   const loadEvents = useCallback(
     async (lat: number, lng: number) => {
@@ -59,9 +56,19 @@ export default function MapScreen() {
     [],
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      requestPermission();
+      if (lastCenter.current) {
+        loadEvents(lastCenter.current.lat, lastCenter.current.lng);
+      }
+    }, [requestPermission, loadEvents]),
+  );
+
   useEffect(() => {
     if (coords) {
       const c = { lat: coords.latitude, lng: coords.longitude };
+      lastCenter.current = c;
       setCenter(c);
       loadEvents(c.lat, c.lng);
     }
@@ -123,12 +130,14 @@ export default function MapScreen() {
     setSearchText(r.displayName.split(',')[0]);
     setSearchResults([]);
     setCenter({ lat: r.lat, lng: r.lng });
+    lastCenter.current = { lat: r.lat, lng: r.lng };
     loadEvents(r.lat, r.lng);
   }
 
   function goMyLocation() {
     if (coords) {
       setCenter({ lat: coords.latitude, lng: coords.longitude });
+      lastCenter.current = { lat: coords.latitude, lng: coords.longitude };
       loadEvents(coords.latitude, coords.longitude);
       sendToMap({ type: 'setUser', lat: coords.latitude, lng: coords.longitude });
     }
@@ -336,6 +345,12 @@ function EventCard({ event, t }: { event: NearbyEvent; t: (k: string, p?: Record
         </View>
       )}
 
+      {event.rating_count > 0 && (
+        <View style={styles.cardRating}>
+          <StarRatingDisplay rating={event.avg_rating} count={event.rating_count} size={13} />
+        </View>
+      )}
+
       <View style={styles.cardBottom}>
         <ThemedText variant="caption" color={COLORS.neutral[500]}>
           {t('event.by', { name: event.creator_username })}
@@ -487,6 +502,7 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   cardAddr: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: SPACING.xs },
+  cardRating: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.xs },
   cardBottom: {
     flexDirection: 'row',
     alignItems: 'center',

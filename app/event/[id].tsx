@@ -15,7 +15,8 @@ import {
   Keyboard,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ArrowLeft, Heart, Check, X, Flag, Trash2, Clock, Image as ImageIcon, Send, MapPin, MoveVertical as MoreVertical } from 'lucide-react-native';
+import { ArrowLeft, Heart, Check, X, Flag, Trash2, Clock, Image as ImageIcon, Send, MapPin, MoveVertical as MoreVertical, Star } from 'lucide-react-native';
+import { StarRatingDisplay, StarRatingInteractive } from '@/components/StarRating';
 import { useI18n } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -33,6 +34,9 @@ export default function EventDetailScreen() {
   const [creator, setCreator] = useState<Profile | null>(null);
   const [comments, setComments] = useState<CommentWithUser[]>([]);
   const [myReactions, setMyReactions] = useState<ReactionStatus[]>([]);
+  const [myRating, setMyRating] = useState<number>(0);
+  const [avgRating, setAvgRating] = useState<number>(0);
+  const [ratingCount, setRatingCount] = useState<number>(0);
   const [commentText, setCommentText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sendingComment, setSendingComment] = useState(false);
@@ -94,6 +98,16 @@ export default function EventDetailScreen() {
 
     const nearby = (locData as NearbyEvent[])?.find((e) => e.id === id);
 
+    const { data: ratingsData } = await supabase
+      .from('event_ratings')
+      .select('stars')
+      .eq('event_id', id);
+
+    const allRatings = ratingsData ?? [];
+    const avg = allRatings.length > 0 ? allRatings.reduce((sum: number, r: any) => sum + r.stars, 0) / allRatings.length : 0;
+    setAvgRating(avg);
+    setRatingCount(allRatings.length);
+
     setEvent({
       id: eventData.id,
       creator_id: eventData.creator_id,
@@ -110,6 +124,8 @@ export default function EventDetailScreen() {
       not_going_count: notGoing ?? 0,
       liked_count: liked ?? 0,
       distance_m: nearby?.distance_m ?? 0,
+      avg_rating: nearby?.avg_rating ?? avg,
+      rating_count: nearby?.rating_count ?? allRatings.length,
     });
     setCreator(creatorData as Profile | null);
     setLoading(false);
@@ -153,11 +169,23 @@ export default function EventDetailScreen() {
     setMyReactions((data?.map((r: { status: string }) => r.status as ReactionStatus)) ?? []);
   }, [id, session]);
 
+  const loadMyRating = useCallback(async () => {
+    if (!id || !session) return;
+    const { data } = await supabase
+      .from('event_ratings')
+      .select('stars')
+      .eq('event_id', id)
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+    setMyRating(data?.stars ?? 0);
+  }, [id, session]);
+
   useEffect(() => {
     loadEvent();
     loadComments();
     loadMyReactions();
-  }, [loadEvent, loadComments, loadMyReactions]);
+    loadMyRating();
+  }, [loadEvent, loadComments, loadMyReactions, loadMyRating]);
 
   // Realtime subscriptions
   useEffect(() => {
@@ -180,6 +208,23 @@ export default function EventDetailScreen() {
       supabase.removeChannel(channel);
     };
   }, [id, loadComments, loadEvent, loadMyReactions]);
+
+  async function submitRating(stars: number) {
+    if (!id || !session) return;
+    setMyRating(stars);
+    const { data: existing } = await supabase
+      .from('event_ratings')
+      .select('id')
+      .eq('event_id', id)
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+    if (existing) {
+      await supabase.from('event_ratings').update({ stars }).eq('id', existing.id);
+    } else {
+      await supabase.from('event_ratings').insert({ event_id: id, user_id: session.user.id, stars });
+    }
+    loadEvent();
+  }
 
   async function toggleReaction(status: ReactionStatus) {
     if (!id || !session) return;
@@ -460,6 +505,30 @@ export default function EventDetailScreen() {
               <View style={styles.addrRow}>
                 <MapPin color={COLORS.neutral[400]} size={16} />
                 <ThemedText variant="muted" color={COLORS.neutral[600]}>{event.address_text}</ThemedText>
+              </View>
+            )}
+
+            {/* Overall rating display */}
+            {ratingCount > 0 && (
+              <View style={styles.ratingSummaryRow}>
+                <StarRatingDisplay rating={avgRating} count={ratingCount} size={18} />
+              </View>
+            )}
+
+            {/* Interactive star rating */}
+            {session && (
+              <View style={styles.interactiveRatingBox}>
+                <ThemedText variant="label" color={COLORS.neutral[700]} weight="semibold">
+                  {t('event.rateEvent')}
+                </ThemedText>
+                <StarRatingInteractive
+                  rating={myRating}
+                  size={36}
+                  onRate={submitRating}
+                />
+                <ThemedText variant="caption" color={COLORS.neutral[500]}>
+                  {myRating > 0 ? `${t('event.yourRating')}: ${myRating}` : t('event.rateHint')}
+                </ThemedText>
               </View>
             )}
 
@@ -786,6 +855,14 @@ const styles = StyleSheet.create({
   addrRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginTop: SPACING.md },
   endsInRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginTop: SPACING.sm },
   reactionsRow: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.lg },
+  ratingSummaryRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.md },
+  interactiveRatingBox: {
+    marginTop: SPACING.lg,
+    padding: SPACING.md,
+    backgroundColor: COLORS.neutral[50],
+    borderRadius: RADII.lg,
+    gap: SPACING.xs,
+  },
   reactionBtn: {
     flex: 1,
     flexDirection: 'row',

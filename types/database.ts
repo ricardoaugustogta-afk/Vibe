@@ -51,7 +51,17 @@ export interface NearbyEvent {
   not_going_count: number;
   liked_count: number;
   distance_m: number;
+  avg_rating: number;
+  rating_count: number;
 }
+
+export type EventRating = {
+  id: string;
+  event_id: string;
+  user_id: string;
+  stars: number;
+  created_at: string;
+};
 
 export interface CommentRow {
   id: string;
