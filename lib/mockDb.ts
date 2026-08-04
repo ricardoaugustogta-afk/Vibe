@@ -7,6 +7,7 @@ type DBShape = {
   events: Row[];
   comments: Row[];
   event_reactions: Row[];
+  event_ratings: Row[];
   reports: Row[];
 };
 
@@ -120,6 +121,15 @@ function seed(): DBShape {
       { id: 'react-007', event_id: 'event-upcoming-001', user_id: 'user-marcos-001', status: 'going', created_at: iso(-1200000) },
       { id: 'react-008', event_id: 'event-upcoming-001', user_id: DEMO_USER_ID, status: 'going', created_at: iso(-600000) },
       { id: 'react-009', event_id: 'event-upcoming-002', user_id: 'user-julia-002', status: 'liked', created_at: iso(-900000) },
+    ],
+    event_ratings: [
+      { id: 'rating-001', event_id: 'event-live-001', user_id: 'user-julia-002', stars: 5, created_at: iso(-20 * 60000) },
+      { id: 'rating-002', event_id: 'event-live-001', user_id: 'user-pedro-003', stars: 4, created_at: iso(-18 * 60000) },
+      { id: 'rating-003', event_id: 'event-live-001', user_id: 'user-marcos-001', stars: 5, created_at: iso(-15 * 60000) },
+      { id: 'rating-004', event_id: 'event-live-002', user_id: 'user-marcos-001', stars: 5, created_at: iso(-10 * 60000) },
+      { id: 'rating-005', event_id: 'event-live-002', user_id: 'user-julia-002', stars: 3, created_at: iso(-8 * 60000) },
+      { id: 'rating-006', event_id: 'event-upcoming-001', user_id: 'user-marcos-001', stars: 4, created_at: iso(-1200000) },
+      { id: 'rating-007', event_id: 'event-upcoming-002', user_id: 'user-julia-002', stars: 5, created_at: iso(-900000) },
     ],
     reports: [],
   };
@@ -247,6 +257,7 @@ class MockQueryBuilder {
         const eventIds = toDelete.map((r) => r.id);
         db.comments = db.comments.filter((c) => !eventIds.includes(c.event_id));
         db.event_reactions = db.event_reactions.filter((r) => !eventIds.includes(r.event_id));
+        db.event_ratings = db.event_ratings.filter((r) => !eventIds.includes(r.event_id));
         db.reports = db.reports.filter((r) => !eventIds.includes(r.event_id));
       }
       (db as any)[this.table] = rows.filter((r) => !toDelete.includes(r));
@@ -369,6 +380,8 @@ async function rpc(name: string, params: any): Promise<{ data: any; error: any }
 
   const data = nearby.map(({ e, dist }) => {
     const profile = db.profiles.find((p) => p.id === e.creator_id);
+    const ratings = db.event_ratings.filter((r) => r.event_id === e.id);
+    const avgRating = ratings.length > 0 ? ratings.reduce((sum, r) => sum + r.stars, 0) / ratings.length : 0;
     return {
       id: e.id,
       creator_id: e.creator_id,
@@ -385,6 +398,8 @@ async function rpc(name: string, params: any): Promise<{ data: any; error: any }
       not_going_count: db.event_reactions.filter((r) => r.event_id === e.id && r.status === 'not_going').length,
       liked_count: db.event_reactions.filter((r) => r.event_id === e.id && r.status === 'liked').length,
       distance_m: dist,
+      avg_rating: avgRating,
+      rating_count: ratings.length,
     };
   });
 

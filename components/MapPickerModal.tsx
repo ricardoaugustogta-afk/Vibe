@@ -33,7 +33,7 @@ interface MapPickerModalProps {
 }
 
 export function MapPickerModal({ visible, onClose, onConfirm, initialLat, initialLng }: MapPickerModalProps) {
-  const { coords } = useLocation();
+  const { coords, requestPermission } = useLocation();
   const webRef = useRef<WebView>(null);
   const [picked, setPicked] = useState<{ lat: number; lng: number } | null>(null);
   const [address, setAddress] = useState('');
@@ -43,17 +43,21 @@ export function MapPickerModal({ visible, onClose, onConfirm, initialLat, initia
   const [showSearch, setShowSearch] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const startLat = initialLat ?? coords?.latitude ?? -11.8563;
-  const startLng = initialLng ?? coords?.longitude ?? -55.5084;
+  const startLat = initialLat ?? coords?.latitude ?? null;
+  const startLng = initialLng ?? coords?.longitude ?? null;
 
-  const html = buildMapHtml({
-    initialLat: startLat,
-    initialLng: startLng,
-    pickMode: true,
-    dark: true,
-    userLat: coords?.latitude ?? startLat,
-    userLng: coords?.longitude ?? startLng,
-  });
+  const hasRealCoords = startLat !== null && startLng !== null;
+
+  const html = hasRealCoords
+    ? buildMapHtml({
+        initialLat: startLat!,
+        initialLng: startLng!,
+        pickMode: true,
+        dark: true,
+        userLat: coords?.latitude ?? startLat!,
+        userLng: coords?.longitude ?? startLng!,
+      })
+    : null;
 
   const sendToMap = useCallback((msg: object) => {
     webRef.current?.postMessage(JSON.stringify(msg));
@@ -181,15 +185,29 @@ export function MapPickerModal({ visible, onClose, onConfirm, initialLat, initia
         </View>
 
         <View style={styles.mapWrap}>
-          <WebView
-            ref={webRef}
-            source={{ html }}
-            style={styles.map}
-            onMessage={handleMessage}
-            javaScriptEnabled
-            originWhitelist={['*']}
-            scrollEnabled={false}
-          />
+          {!html ? (
+            <View style={styles.mapLoading}>
+              <ActivityIndicator size="large" color={COLORS.primary[600]} />
+              <ThemedText variant="muted" color={COLORS.neutral[500]} style={{ marginTop: SPACING.md }}>
+                Aguardando GPS...
+              </ThemedText>
+              <Pressable style={styles.retryGpsBtn} onPress={requestPermission}>
+                <ThemedText color={COLORS.primary[600]} weight="semibold" size={14}>
+                  Ativar GPS
+                </ThemedText>
+              </Pressable>
+            </View>
+          ) : (
+            <WebView
+              ref={webRef}
+              source={{ html }}
+              style={styles.map}
+              onMessage={handleMessage}
+              javaScriptEnabled
+              originWhitelist={['*']}
+              scrollEnabled={false}
+            />
+          )}
 
           <Pressable style={styles.myLocBtn} onPress={goMyLocation}>
             <Navigation color={COLORS.primary[600]} size={22} />
@@ -281,6 +299,14 @@ const styles = StyleSheet.create({
   resultText: { flex: 1 },
   mapWrap: { flex: 1 },
   map: { flex: 1 },
+  mapLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: SPACING.sm },
+  retryGpsBtn: {
+    marginTop: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADII.md,
+    backgroundColor: COLORS.primary[50],
+  },
   myLocBtn: {
     position: 'absolute',
     bottom: SPACING.md,
