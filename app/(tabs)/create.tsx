@@ -16,6 +16,7 @@ import { useI18n } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from '@/hooks/useLocation';
 import { supabase } from '@/lib/supabase';
+import { addLocalEvent } from '@/lib/localEvents';
 import { ThemedText } from '@/components/ThemedText';
 import { AuthTextInput } from '@/components/AuthTextInput';
 import { MapPickerModal } from '@/components/MapPickerModal';
@@ -130,6 +131,30 @@ export default function CreateScreen() {
       setError(t('create.errorGeneric'));
       return;
     }
+
+    const startMs = startTime.getTime();
+    const endMs = endTime.getTime();
+
+    addLocalEvent({
+      id: data.id,
+      creator_id: session!.user.id,
+      title: title.trim(),
+      description: description.trim() || null,
+      category,
+      address_text: address.trim() || null,
+      start_time: startTime.toISOString(),
+      end_time: endTime.toISOString(),
+      lat: loc.lat,
+      lng: loc.lng,
+      creator_username: session?.user?.user_metadata?.username ?? t('common.anonymous'),
+      going_count: 0,
+      not_going_count: 0,
+      liked_count: 0,
+      distance_m: 0,
+      avg_rating: 0,
+      rating_count: 0,
+    });
+
     Alert.alert(t('app.name'), t('create.success'), [
       {
         text: 'OK',

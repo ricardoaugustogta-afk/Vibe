@@ -22,6 +22,7 @@ import { buildMapHtml } from '@/lib/mapHtml';
 import { searchPlace, type GeocodeResult } from '@/lib/geocode';
 import { COLORS, SPACING, RADII, SHADOWS, CATEGORIES_COLORS } from '@/lib/theme';
 import { isLive, formatDistance, timeUntil } from '@/lib/time';
+import { getLocalEvents } from '@/lib/localEvents';
 import { ThemedText } from '@/components/ThemedText';
 import type { NearbyEvent } from '@/types/database';
 
@@ -43,14 +44,21 @@ export default function MapScreen() {
   const loadEvents = useCallback(
     async (lat: number, lng: number) => {
       setLoadingEvents(true);
-      const { data, error } = await supabase.rpc('vibe_nearby_events', {
-        p_lat: lat,
-        p_lng: lng,
-        p_radius_m: 25000,
-      });
-      if (!error && data) {
-        setEvents(data as NearbyEvent[]);
+      try {
+        const { data, error } = await supabase.rpc('vibe_nearby_events', {
+          p_lat: lat,
+          p_lng: lng,
+          p_radius_m: 25000,
+        });
+        if (!error && data && (data as NearbyEvent[]).length > 0) {
+          setEvents(data as NearbyEvent[]);
+          setLoadingEvents(false);
+          return;
+        }
+      } catch {
+        // fall through to local fallback
       }
+      setEvents(getLocalEvents(lat, lng));
       setLoadingEvents(false);
     },
     [],
