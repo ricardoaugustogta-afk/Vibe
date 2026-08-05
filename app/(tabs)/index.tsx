@@ -10,9 +10,11 @@ import {
   ScrollView,
   LayoutAnimation,
   Platform,
+  Modal,
 } from 'react-native';
-import { Search, MapPin, Navigation, X, ChevronUp } from 'lucide-react-native';
+import { Search, MapPin, Navigation, X, ChevronUp, Store, Clock, ChevronRight } from 'lucide-react-native';
 import { StarRatingDisplay } from '@/components/StarRating';
+import { Avatar } from '@/components/Avatar';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { router, useFocusEffect } from 'expo-router';
 import { useI18n } from '@/contexts/LanguageContext';
@@ -26,6 +28,20 @@ import { getLocalEvents } from '@/lib/localEvents';
 import { ThemedText } from '@/components/ThemedText';
 import type { NearbyEvent } from '@/types/database';
 
+interface GroupedMarker {
+  id: string;
+  lat: number;
+  lng: number;
+  color: string;
+  live: boolean;
+  title: string;
+  avatarUrl: string | null;
+  business: boolean;
+  eventCount: number;
+  events: NearbyEvent[];
+  creatorUsername: string;
+}
+
 export default function MapScreen() {
   const { t } = useI18n();
   const { coords, granted, loading: locLoading, requestPermission } = useLocation();
@@ -38,6 +54,7 @@ export default function MapScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [scheduleMarker, setScheduleMarker] = useState<GroupedMarker | null>(null);
 
   const lastCenter = useRef<{ lat: number; lng: number } | null>(null);
 
@@ -92,13 +109,45 @@ export default function MapScreen() {
     }
   }, [center, sendToMap]);
 
-  const markers = events.map((e) => ({
-    id: e.id,
-    lat: e.lat,
-    lng: e.lng,
-    color: CATEGORIES_COLORS[e.category] ?? COLORS.primary[600],
-    live: isLive(e.start_time),
-    title: e.title,
+  const groupedMarkers: GroupedMarker[] = (() => {
+    const byCreator = new Map<string, NearbyEvent[]>();
+    for (const e of events) {
+      const key = e.creator_id;
+      const arr = byCreator.get(key) ?? [];
+      arr.push(e);
+      byCreator.set(key, arr);
+    }
+    const result: GroupedMarker[] = [];
+    for (const [, evts] of byCreator) {
+      const first = evts[0];
+      const anyLive = evts.some((e) => isLive(e.start_time));
+      result.push({
+        id: first.creator_id,
+        lat: first.lat,
+        lng: first.lng,
+        color: CATEGORIES_COLORS[first.category] ?? COLORS.primary[600],
+        live: anyLive,
+        title: first.title,
+        avatarUrl: first.creator_avatar_url,
+        business: first.creator_account_type === 'business',
+        eventCount: evts.length,
+        events: evts.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()),
+        creatorUsername: first.creator_username,
+      });
+    }
+    return result;
+  })();
+
+  const markers = groupedMarkers.map((m) => ({
+    id: m.id,
+    lat: m.lat,
+    lng: m.lng,
+    color: m.color,
+    live: m.live,
+    title: m.title,
+    avatarUrl: m.avatarUrl,
+    business: m.business,
+    eventCount: m.eventCount,
   }));
 
   useEffect(() => {
@@ -155,7 +204,10 @@ export default function MapScreen() {
     try {
       const msg = JSON.parse(e.nativeEvent.data);
       if (msg.type === 'markerClick' && msg.id) {
-        router.push(`/event/${msg.id}`);
+        const found = groupedMarkers.find((m) => m.id === msg.id);
+        if (found) {
+          setScheduleMarker(found);
+        }
       }
     } catch {
       // ignore
@@ -303,7 +355,124 @@ export default function MapScreen() {
           />
         )}
       </View>
+
+      {/* Schedule popup */}
+      <SchedulePopup marker={scheduleMarker} onClose={() => setScheduleMarker(null)} t={t} />
     </View>
+  );
+}
+
+function SchedulePopup({
+  marker,
+  onClose,
+  t,
+}: {
+  marker: GroupedMarker | null;
+  onClose: () => void;
+  t: (k: string, p?: Record<string, string | number>) => string;
+}) {
+  if (!marker) return null;
+
+  return (
+    <Modal visible={!!marker} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.popupOverlay} onPress={onClose}>
+        <Pressable style={styles.popupSheet} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.popupHandle} />
+
+          {/* Profile header */}
+          <View style={styles.popupProfile}>
+            <Avatar url={marker.avatarUrl} username={marker.creatorUsername} size={52} business={marker.business} />
+            <View style={styles.popupProfileInfo}>
+              <View style={styles.popupNameRow}>
+                <ThemedText variant="h3" color={COLORS.neutral[900]} weight="semibold" numberOfLines={1}>
+                  {marker.creatorUsername}
+                </ThemedText>
+                {marker.business && (
+                  <View style={styles.popupBusinessBadge}>
+                    <Store color={COLORS.accent[500]} size={13} />
+                    <ThemedText color={COLORS.accent[500]} weight="semibold" size={10}>
+                      {t('profile.business')}
+                    </ThemedText>
+                  </View>
+                )}
+              </View>
+              {marker.events[0]?.address_text && (
+                <View style={styles.popupAddr}>
+                  <MapPin color={COLORS.neutral[400]} size={13} />
+                  <ThemedText variant="muted" color={COLORS.neutral[500]} numberOfLines={1}>
+                    {marker.events[0].address_text}
+                  </ThemedText>
+                </View>
+              )}
+            </View>
+          </View>
+
+          <ThemedText variant="label" color={COLORS.neutral[600]} weight="medium" style={{ marginTop: SPACING.md, marginBottom: SPACING.xs }}>
+            {t('map.eventsAtLocation')}
+          </ThemedText>
+
+          {/* Event schedule list */}
+          <FlatList
+            data={marker.events}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => <ScheduleEventRow event={item} t={t} />}
+            ItemSeparatorComponent={() => <View style={styles.scheduleSeparator} />}
+            showsVerticalScrollIndicator={false}
+            style={styles.scheduleList}
+          />
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function ScheduleEventRow({
+  event,
+  t,
+}: {
+  event: NearbyEvent;
+  t: (k: string, p?: Record<string, string | number>) => string;
+}) {
+  const live = isLive(event.start_time);
+  const remaining = timeUntil(event.end_time);
+  const remainingLabel = remaining
+    ? `${remaining.value}${remaining.unit === 'min' ? t('common.minutes') : remaining.unit === 'h' ? t('common.hours') : t('common.days')}`
+    : '';
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.scheduleRow, pressed && { opacity: 0.7 }]}
+      onPress={() => router.push(`/event/${event.id}`)}
+    >
+      <View style={[styles.scheduleDot, { backgroundColor: CATEGORIES_COLORS[event.category] ?? COLORS.primary[600] }]} />
+      <View style={styles.scheduleContent}>
+        <View style={styles.scheduleTopRow}>
+          <ThemedText variant="label" color={COLORS.neutral[900]} weight="semibold" numberOfLines={1} style={{ flex: 1 }}>
+            {event.title}
+          </ThemedText>
+          {live ? (
+            <View style={styles.scheduleLiveBadge}>
+              <View style={styles.scheduleLiveDot} />
+              <ThemedText color={COLORS.live[600]} weight="bold" size={10}>
+                {t('map.now').toUpperCase()}
+              </ThemedText>
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.scheduleTimeRow}>
+          <Clock color={COLORS.neutral[400]} size={12} />
+          <ThemedText variant="caption" color={COLORS.neutral[500]}>
+            {live && remainingLabel
+              ? `${t('map.endsIn')} ${remainingLabel}`
+              : formatDistance(event.distance_m)}
+          </ThemedText>
+          {event.rating_count > 0 && (
+            <StarRatingDisplay rating={event.avg_rating} count={event.rating_count} size={11} />
+          )}
+        </View>
+      </View>
+      <ChevronRight color={COLORS.neutral[300]} size={18} />
+    </Pressable>
   );
 }
 
@@ -522,4 +691,67 @@ const styles = StyleSheet.create({
   },
   cardStats: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   emptyState: { paddingVertical: SPACING.xxl, alignItems: 'center', paddingHorizontal: SPACING.xl },
+  // Schedule popup
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  popupSheet: {
+    backgroundColor: COLORS.neutral[0],
+    borderTopLeftRadius: RADII.xl,
+    borderTopRightRadius: RADII.xl,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xl,
+    maxHeight: '70%',
+    ...SHADOWS.lg,
+  },
+  popupHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.neutral[300],
+    alignSelf: 'center',
+    marginBottom: SPACING.md,
+  },
+  popupProfile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  popupProfileInfo: { flex: 1 },
+  popupNameRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
+  popupBusinessBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: COLORS.accent[50],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADII.pill,
+  },
+  popupAddr: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  scheduleList: { maxHeight: 320 },
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+  },
+  scheduleDot: { width: 8, height: 8, borderRadius: 4 },
+  scheduleContent: { flex: 1 },
+  scheduleTopRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
+  scheduleTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  scheduleLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: COLORS.live[50],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADII.pill,
+  },
+  scheduleLiveDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: COLORS.live[500] },
+  scheduleSeparator: { height: 1, backgroundColor: COLORS.neutral[200] },
 });

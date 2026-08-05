@@ -38,10 +38,10 @@ function seed(): DBShape {
 
   return {
     profiles: [
-      { id: DEMO_USER_ID, username: 'Voce', avatar_url: null, instagram_username: null, language: 'pt-BR', created_at: iso(0) },
-      { id: 'user-marcos-001', username: 'marcos_slz', avatar_url: null, instagram_username: 'marcos_slz', language: 'pt-BR', created_at: iso(-86400000 * 30) },
-      { id: 'user-julia-002', username: 'julia_p', avatar_url: null, instagram_username: null, language: 'pt-BR', created_at: iso(-86400000 * 20) },
-      { id: 'user-pedro-003', username: 'pedro_pk', avatar_url: null, instagram_username: null, language: 'pt-BR', created_at: iso(-86400000 * 15) },
+      { id: DEMO_USER_ID, username: 'Voce', avatar_url: null, instagram_username: null, language: 'pt-BR', account_type: 'personal', created_at: iso(0) },
+      { id: 'user-marcos-001', username: 'marcos_slz', avatar_url: null, instagram_username: 'marcos_slz', language: 'pt-BR', account_type: 'personal', created_at: iso(-86400000 * 30) },
+      { id: 'user-julia-002', username: 'julia_p', avatar_url: null, instagram_username: null, language: 'pt-BR', account_type: 'personal', created_at: iso(-86400000 * 20) },
+      { id: 'user-pedro-003', username: 'pedro_pk', avatar_url: null, instagram_username: null, language: 'pt-BR', account_type: 'business', created_at: iso(-86400000 * 15) },
     ],
     events: [
       {
@@ -394,6 +394,8 @@ async function rpc(name: string, params: any): Promise<{ data: any; error: any }
       lat: e._lat,
       lng: e._lng,
       creator_username: profile?.username ?? 'Anonimo',
+      creator_avatar_url: profile?.avatar_url ?? null,
+      creator_account_type: (profile?.account_type as 'personal' | 'business') ?? 'personal',
       going_count: db.event_reactions.filter((r) => r.event_id === e.id && r.status === 'going').length,
       not_going_count: db.event_reactions.filter((r) => r.event_id === e.id && r.status === 'not_going').length,
       liked_count: db.event_reactions.filter((r) => r.event_id === e.id && r.status === 'liked').length,

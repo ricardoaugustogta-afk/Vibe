@@ -6,19 +6,33 @@ interface AvatarProps {
   url: string | null | undefined;
   username: string;
   size?: number;
+  business?: boolean;
   style?: ImageStyle;
 }
 
-export function Avatar({ url, username, size = 40, style }: AvatarProps) {
+export function Avatar({ url, username, size = 40, business = false, style }: AvatarProps) {
   const initials = (username || '?')
     .slice(0, 2)
     .toUpperCase();
+
+  const borderStyle = business
+    ? { borderWidth: 2.5, borderColor: COLORS.accent[500] as unknown as string }
+    : {};
 
   if (url) {
     return (
       <Image
         source={{ uri: url }}
-        style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: COLORS.neutral[200] }, style]}
+        style={[
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: COLORS.neutral[200],
+            ...(business ? { borderWidth: 2.5, borderColor: '#fbbf24' } : {}),
+          },
+          style,
+        ]}
       />
     );
   }
@@ -33,6 +47,7 @@ export function Avatar({ url, username, size = 40, style }: AvatarProps) {
           backgroundColor: COLORS.primary[600],
           alignItems: 'center',
           justifyContent: 'center',
+          ...(business ? { borderWidth: 2.5, borderColor: '#fbbf24' } : {}),
         },
         style,
       ]}

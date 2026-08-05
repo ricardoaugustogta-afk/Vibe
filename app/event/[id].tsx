@@ -120,6 +120,8 @@ export default function EventDetailScreen() {
       lat: nearby?.lat ?? 0,
       lng: nearby?.lng ?? 0,
       creator_username: creatorData?.username ?? t('common.anonymous'),
+      creator_avatar_url: creatorData?.avatar_url ?? null,
+      creator_account_type: (creatorData as any)?.account_type ?? 'personal',
       going_count: going ?? 0,
       not_going_count: notGoing ?? 0,
       liked_count: liked ?? 0,

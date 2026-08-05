@@ -51,6 +51,7 @@ function createDemoProfile(username: string, language: Language): Profile {
     avatar_url: null,
     instagram_username: null,
     language,
+    account_type: 'personal',
     created_at: new Date().toISOString(),
   };
 }
@@ -65,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function loadProfile(sessionUserId: string): Promise<Profile | null> {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, avatar_url, instagram_username, language, created_at')
+      .select('id, username, avatar_url, instagram_username, language, account_type, created_at')
       .eq('id', sessionUserId)
       .maybeSingle();
     if (error) {
@@ -156,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       avatar_url: profile.avatar_url,
       instagram_username: profile.instagram_username,
       language: profile.language,
+      account_type: profile.account_type,
       created_at: profile.created_at,
     });
     setState({ session, profile, loading: false });

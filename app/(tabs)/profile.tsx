@@ -11,7 +11,7 @@ import {
   FlatList,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { User, Instagram, Camera, Check, LogOut, Info, MapPin, ChevronRight } from 'lucide-react-native';
+import { User, Instagram, Camera, Check, LogOut, Info, MapPin, ChevronRight, Store, UserRound } from 'lucide-react-native';
 import { useI18n } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -19,7 +19,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { Avatar } from '@/components/Avatar';
 import { COLORS, SPACING, RADII, SHADOWS, CATEGORIES_COLORS, FONT_SIZES } from '@/lib/theme';
 import { isLive, timeUntil, formatDistance } from '@/lib/time';
-import { LANGUAGES, type Language, type NearbyEvent } from '@/types/database';
+import { LANGUAGES, type Language, type NearbyEvent, type AccountType } from '@/types/database';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 
@@ -29,6 +29,7 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [username, setUsername] = useState(profile?.username ?? '');
   const [instagram, setInstagram] = useState(profile?.instagram_username ?? '');
+  const [accountType, setAccountType] = useState<AccountType>(profile?.account_type ?? 'personal');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [myEvents, setMyEvents] = useState<NearbyEvent[]>([]);
@@ -130,6 +131,7 @@ export default function ProfileScreen() {
       .update({
         username: username.trim(),
         instagram_username: cleanIg || null,
+        account_type: accountType,
       })
       .eq('id', session.user.id);
     setBusy(false);
@@ -201,6 +203,36 @@ export default function ProfileScreen() {
                 autoCapitalize="none"
               />
             </View>
+            <View style={styles.editField}>
+              <View style={styles.accountSelector}>
+                <Pressable
+                  style={[styles.accountPill, accountType === 'personal' && styles.accountPillActive]}
+                  onPress={() => setAccountType('personal')}
+                >
+                  <UserRound color={accountType === 'personal' ? COLORS.neutral[0] : COLORS.neutral[600]} size={16} />
+                  <ThemedText
+                    color={accountType === 'personal' ? COLORS.neutral[0] : COLORS.neutral[600]}
+                    weight={accountType === 'personal' ? 'semibold' : 'medium'}
+                    size={13}
+                  >
+                    {t('profile.personal')}
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[styles.accountPill, accountType === 'business' && styles.accountPillActive]}
+                  onPress={() => setAccountType('business')}
+                >
+                  <Store color={accountType === 'business' ? COLORS.neutral[0] : COLORS.neutral[600]} size={16} />
+                  <ThemedText
+                    color={accountType === 'business' ? COLORS.neutral[0] : COLORS.neutral[600]}
+                    weight={accountType === 'business' ? 'semibold' : 'medium'}
+                    size={13}
+                  >
+                    {t('profile.business')}
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </View>
             {error && (
               <ThemedText color={COLORS.live[600]} size={FONT_SIZES.sm} style={{ marginLeft: SPACING.sm }}>
                 {error}
@@ -228,6 +260,14 @@ export default function ProfileScreen() {
               <ThemedText variant="h2" color={COLORS.neutral[900]}>
                 {profile.username}
               </ThemedText>
+              {profile.account_type === 'business' && (
+                <View style={styles.businessBadge}>
+                  <Store color={COLORS.accent[500]} size={14} />
+                  <ThemedText color={COLORS.accent[500]} weight="semibold" size={11}>
+                    {t('profile.business')}
+                  </ThemedText>
+                </View>
+              )}
               {profile.instagram_username && (
                 <Pressable
                   style={styles.igBtn}
@@ -240,7 +280,7 @@ export default function ProfileScreen() {
                 </Pressable>
               )}
             </View>
-            <Pressable style={styles.editBtn} onPress={() => { setEditing(true); setUsername(profile.username); setInstagram(profile.instagram_username ?? ''); }}>
+            <Pressable style={styles.editBtn} onPress={() => { setEditing(true); setUsername(profile.username); setInstagram(profile.instagram_username ?? ''); setAccountType(profile.account_type ?? 'personal'); }}>
               <ThemedText color={COLORS.primary[600]} weight="semibold" size={14}>
                 {t('profile.editProfile')}
               </ThemedText>
@@ -451,6 +491,31 @@ const styles = StyleSheet.create({
   catDot: { width: 10, height: 10, borderRadius: 5 },
   aboutHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm },
   aboutText: { marginBottom: SPACING.xs },
+  accountSelector: { flexDirection: 'row', gap: SPACING.sm, paddingVertical: SPACING.xs },
+  accountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.neutral[50],
+    borderWidth: 1.5,
+    borderColor: COLORS.neutral[200],
+  },
+  accountPillActive: {
+    backgroundColor: COLORS.primary[600],
+    borderColor: COLORS.primary[600],
+  },
+  businessBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.accent[50],
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADII.pill,
+  },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -147,6 +147,8 @@ export default function CreateScreen() {
       lat: loc.lat,
       lng: loc.lng,
       creator_username: session?.user?.user_metadata?.username ?? t('common.anonymous'),
+      creator_avatar_url: null,
+      creator_account_type: 'personal',
       going_count: 0,
       not_going_count: 0,
       liked_count: 0,

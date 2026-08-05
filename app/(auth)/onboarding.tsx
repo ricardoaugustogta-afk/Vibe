@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, StyleSheet, Pressable, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { User, Instagram, Check } from 'lucide-react-native';
+import { User, Instagram, Check, Store, UserRound } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useI18n } from '@/contexts/LanguageContext';
@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { ThemedText } from '@/components/ThemedText';
 import { AuthTextInput } from '@/components/AuthTextInput';
 import { COLORS, SPACING, RADII, SHADOWS } from '@/lib/theme';
-import type { Language } from '@/types/database';
+import type { Language, AccountType } from '@/types/database';
 import { LANGUAGES } from '@/types/database';
 
 export default function OnboardingScreen() {
@@ -17,6 +17,7 @@ export default function OnboardingScreen() {
   const [username, setUsername] = useState('');
   const [instagram, setInstagram] = useState('');
   const [lang, setLang] = useState<Language>('pt-BR');
+  const [accountType, setAccountType] = useState<AccountType>('personal');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -37,6 +38,7 @@ export default function OnboardingScreen() {
       username: username.trim(),
       instagram_username: cleanIg || null,
       language: lang,
+      account_type: accountType,
     });
     setBusy(false);
     if (err) {
@@ -79,6 +81,38 @@ export default function OnboardingScreen() {
             autoCapitalize="none"
             icon={<Instagram color={COLORS.neutral[400]} size={20} />}
           />
+
+          <View style={styles.accountSection}>
+            <ThemedText variant="label" color={COLORS.neutral[600]} weight="medium">
+              {t('profile.accountType')}
+            </ThemedText>
+            <View style={styles.accountRow}>
+              <Pressable
+                style={[styles.accountPill, accountType === 'personal' && styles.accountPillActive]}
+                onPress={() => setAccountType('personal')}
+              >
+                <UserRound color={accountType === 'personal' ? COLORS.neutral[0] : COLORS.neutral[600]} size={18} />
+                <ThemedText
+                  color={accountType === 'personal' ? COLORS.neutral[0] : COLORS.neutral[600]}
+                  weight={accountType === 'personal' ? 'semibold' : 'medium'}
+                >
+                  {t('profile.personal')}
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                style={[styles.accountPill, accountType === 'business' && styles.accountPillActive]}
+                onPress={() => setAccountType('business')}
+              >
+                <Store color={accountType === 'business' ? COLORS.neutral[0] : COLORS.neutral[600]} size={18} />
+                <ThemedText
+                  color={accountType === 'business' ? COLORS.neutral[0] : COLORS.neutral[600]}
+                  weight={accountType === 'business' ? 'semibold' : 'medium'}
+                >
+                  {t('profile.business')}
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
 
           <View style={styles.langSection}>
             <ThemedText variant="label" color={COLORS.neutral[600]} weight="medium">
@@ -135,6 +169,23 @@ const styles = StyleSheet.create({
   header: { gap: SPACING.xs, marginBottom: SPACING.xl },
   subtitle: { marginTop: SPACING.xs },
   form: { gap: SPACING.md },
+  accountSection: { gap: SPACING.sm, marginTop: SPACING.md },
+  accountRow: { flexDirection: 'row', gap: SPACING.sm },
+  accountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.neutral[100],
+    borderWidth: 1.5,
+    borderColor: COLORS.neutral[200],
+  },
+  accountPillActive: {
+    backgroundColor: COLORS.primary[600],
+    borderColor: COLORS.primary[600],
+  },
   langSection: { gap: SPACING.sm, marginTop: SPACING.xs },
   langRow: { flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' },
   langPill: {

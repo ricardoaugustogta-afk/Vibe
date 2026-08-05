@@ -1,6 +1,7 @@
 export type Language = 'pt-BR' | 'en-US' | 'es-ES';
 
 export type ReactionStatus = 'going' | 'not_going' | 'liked';
+export type AccountType = 'personal' | 'business';
 
 export type EventCategory =
   | 'Geral'
@@ -18,6 +19,7 @@ export interface Profile {
   avatar_url: string | null;
   instagram_username: string | null;
   language: Language;
+  account_type: AccountType;
   created_at: string;
 }
 
@@ -47,6 +49,8 @@ export interface NearbyEvent {
   lat: number;
   lng: number;
   creator_username: string;
+  creator_avatar_url: string | null;
+  creator_account_type: AccountType;
   going_count: number;
   not_going_count: number;
   liked_count: number;
